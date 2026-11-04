@@ -4,10 +4,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
+from dotenv import load_dotenv
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT_DIR / "data"
 REPORTS_DIR = ROOT_DIR / "reports"
+
+load_dotenv(ROOT_DIR / ".env")  # real environment variables still take precedence
 
 
 @dataclass(frozen=True)

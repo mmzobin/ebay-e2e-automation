@@ -3,3 +3,4 @@ pytest-playwright==0.5.2
 playwright==1.48.0
 allure-pytest==2.13.5
 PyYAML==6.0.2
+python-dotenv==1.0.1

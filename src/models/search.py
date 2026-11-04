@@ -9,3 +9,12 @@ class SearchScenario:
     query: str
     max_price: float
     limit: int = 5
+
+
+@dataclass(frozen=True)
+class SearchResultItem:
+    """One product card parsed from the search results page."""
+
+    title: str
+    url: str
+    price: float | None

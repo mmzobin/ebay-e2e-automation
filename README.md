@@ -35,6 +35,7 @@ PWDEBUG=1 pytest -k shoes                # step-by-step in Playwright Inspector
 ### Reports
 ```bash
 allure serve reports/allure-results      # open the Allure report
+allure generate reports/allure-results -o reports/allure-report --clean --single-file   # one HTML file
 playwright show-trace reports/traces/<test-name>.zip   # step-by-step trace of a run
 ```
 Every run also writes a JUnit XML report to `reports/junit.xml`.

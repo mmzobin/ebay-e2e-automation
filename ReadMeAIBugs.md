@@ -1,5 +1,3 @@
-# AI-generated test — static code review
-
 The snippet under review:
 
 ```python

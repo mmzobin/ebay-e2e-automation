@@ -23,10 +23,13 @@ class SearchResultsPage(BasePage):
     # reading only these spans, so the crossed-out old price is ignored
     CARD_PRICE_XPATH = ".//*[contains(@class, 's-card__price') or contains(@class, 's-item__price')]"
 
-    MIN_PRICE_INPUT = "input[type='text'][aria-label^='Minimum Value']"
     MAX_PRICE_INPUT = "input[type='text'][aria-label^='Maximum Value']"
     PRICE_SUBMIT = "button[title='Submit price range']"
-    NEXT_PAGE = "a.pagination__next"
+
+    @property
+    def next_page_link(self):
+        # on the last page "next" is a disabled <button>, not a link, so it won't match
+        return self.page.get_by_role("link", name="Go to next search page")
 
     def wait_loaded(self) -> "SearchResultsPage":
         self.ensure_not_blocked()
@@ -66,11 +69,11 @@ class SearchResultsPage(BasePage):
         return SearchResultItem(title=title, url=href.split("?")[0], price=parse_price(price_text))
 
     def has_next_page(self) -> bool:
-        next_link = self.page.locator(self.NEXT_PAGE).first
+        next_link = self.next_page_link
         return next_link.count() > 0 and next_link.get_attribute("aria-disabled") != "true"
 
     def go_to_next_page(self) -> "SearchResultsPage":
         self.log.info("Go to next results page")
-        self.page.locator(self.NEXT_PAGE).first.click()
+        self.next_page_link.click()
         self.page.wait_for_load_state("domcontentloaded")
         return self.wait_loaded()

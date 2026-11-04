@@ -14,8 +14,14 @@ class ItemPage(BasePage):
     VARIANT_NATIVE_SELECTS = f"{VARIANTS_CONTAINER} select:not([hidden]):not(.listbox__native)"
     AVAILABLE_OPTION = "[role='option'][data-sku-value-name]:not([aria-disabled='true'])"
 
-    ADD_TO_CART = "#atcBtn_btn_1, [data-testid='x-atc-action'] a, [data-testid='x-atc-action'] button"
     ADDED_CONFIRMATION = re.compile(r"added to (your )?cart|view in cart", re.I)
+
+    @property
+    def add_to_cart_button(self):
+        # eBay sets aria-hidden on the page when a popup is open, then the role locator
+        # doesn't see the button - test id as a backup
+        by_role = self.page.get_by_role("button", name="Add to cart", exact=True)
+        return by_role.or_(self.page.locator("[data-testid='x-atc-action'] [role='button']")).first
 
     def select_random_variants(self) -> dict[str, str]:
         # size, color etc. - random value from the ones in stock
@@ -54,7 +60,7 @@ class ItemPage(BasePage):
 
     def add_to_cart(self) -> None:
         self.log.info("Click 'Add to cart'")
-        self.page.locator(self.ADD_TO_CART).first.click()
+        self.add_to_cart_button.click()
         self.page.wait_for_load_state("domcontentloaded")
         self.ensure_not_blocked()
         # sometimes eBay goes to the cart, sometimes shows a popup

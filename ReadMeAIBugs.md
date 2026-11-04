@@ -1,4 +1,4 @@
-The snippet under review:
+Code from the task:
 
 ```python
 from playwright.sync_api import sync_playwright
@@ -24,67 +24,61 @@ def test_search_functionality():
     browser.close()
 ```
 
-Review done statically (no running the code), as required.
-Issues are ordered by severity.
+Reviewed by reading the code only (no running), as asked. Most important problems first.
 
 ---
 
-## Bug 1 — The test asserts nothing (false positive)
+## 1. The test doesn't check anything
 
-**Lines:** `results = page.locator(".result-item")` and onwards.
+```python
+results = page.locator(".result-item")
+```
 
-**Problem.** A Playwright `Locator` is *lazy*: creating it does not query the DOM
-and never fails. `results` is assigned and then thrown away — there is no
-`assert` / `expect`. If the click had worked, the test would be **green even
-when the search returned zero results or an error page**. A test that cannot
-fail is worse than no test, because it gives false confidence.
+A locator in Playwright is lazy. Creating it doesn't go to the DOM and can't fail. `results` is
+never used and there is no assert at all. So even if search worked, the test would pass with 0
+results or with an error page. A test that can't fail is worse than no test, it just gives false
+confidence.
 
-**Fix.** Use web-first assertions, which also auto-retry until the timeout:
+**Fix:** add a real check. `expect` also retries until timeout:
 
 ```python
 from playwright.sync_api import expect
 
 results = page.locator(".result-item")
-expect(results.first).to_be_visible()          # at least one result
+expect(results.first).to_be_visible()
 expect(results.first).to_contain_text("playwright", ignore_case=True)
 ```
 
 ---
 
-## Bug 2 — Playwright is started but never stopped; browser is not closed on failure (resource leak)
-
-**Line:** `browser = sync_playwright().start().chromium.launch()`
-and `browser.close()`.
-
-**Problem.**
-1. `sync_playwright().start()` launches the Playwright driver process. The
-   returned `Playwright` object is not stored anywhere, so `.stop()` can never be
-   called — the driver process (Node.js) leaks after every test.
-2. `browser.close()` is the last line, outside of `try/finally`. Any exception
-   earlier (selector not found, timeout, navigation error) skips it and leaves a
-   zombie Chromium. In a suite of hundreds of tests on CI this exhausts memory.
-3. `browser.new_page()` creates an implicit context — no isolation settings
-   (viewport, locale, tracing) can be applied.
-
-**Fix.** Let the context manager (or, better, a pytest fixture) own the
-lifecycle:
+## 2. Playwright is never stopped, browser is not closed on error
 
 ```python
-from playwright.sync_api import sync_playwright
-
-def test_search_functionality():
-    with sync_playwright() as p:
-        browser = p.chromium.launch()
-        try:
-            context = browser.new_context()
-            page = context.new_page()
-            ...
-        finally:
-            browser.close()
+browser = sync_playwright().start().chromium.launch()
+...
+browser.close()
 ```
 
-Idiomatic option — `pytest-playwright` provides the `page` fixture that opens a
-fresh context per test and tears everything down automatically:
+- `sync_playwright().start()` starts the Playwright driver process. The object is not saved
+  anywhere, so `.stop()` can't be called and the process stays alive after every test.
+- `browser.close()` is just the last line. If anything fails before it (locator not found,
+  timeout), it never runs and Chromium stays open. On CI with many tests this eats memory.
+- `browser.new_page()` uses a default context, so there is no place to set viewport, locale,
+  tracing etc.
+
+**Fix:** let a context manager close everything:
+
+```python
+with sync_playwright() as p:
+    browser = p.chromium.launch()
+    try:
+        page = browser.new_context().new_page()
+        ...
+    finally:
+        browser.close()
+```
+
+Even simpler with pytest-playwright, the `page` fixture creates and closes everything per test:
 
 ```python
 def test_search_functionality(page):
@@ -93,97 +87,88 @@ def test_search_functionality(page):
 
 ---
 
-## Bug 3 — Hard-coded `time.sleep()` instead of smart waits (flaky + slow)
-
-**Lines:** `time.sleep(2)`, `time.sleep(3)`.
-
-**Problem.** Fixed sleeps are both too long and too short at the same time:
-on a fast machine they waste 5 seconds per test; on a slow CI agent or slow
-network 2–3 seconds may not be enough and the test fails randomly (flaky).
-They also hide the real synchronisation point — *what* are we waiting for?
-Playwright already auto-waits for elements to be attached, visible, stable and
-enabled before `fill()` / `click()`, so the first sleep is redundant, and the
-second should be an explicit wait for a condition.
-
-**Fix.** Remove `import time` and wait for an observable state:
+## 3. `time.sleep()` instead of waiting for something
 
 ```python
-page.goto("https://example.com", wait_until="domcontentloaded")
-search_box = page.locator("#search")
-search_box.fill("playwright testing")          # auto-waits for the element
+time.sleep(2)
+time.sleep(3)
+```
 
-with page.expect_navigation():                  # or page.wait_for_url("**/search**")
-    page.get_by_role("button", name="Search").click()
+Fixed sleeps are too long and too short at the same time. On a fast machine the test just waits
+5 extra seconds. On a slow CI agent 2-3 seconds may be not enough and the test fails randomly
+(flaky). Also it's not clear what we are waiting for. Playwright already waits for an element to
+be visible and enabled before `fill()` and `click()`, so the first sleep is not needed at all, and
+the second one should be a wait for a real condition.
 
+**Fix:** remove `import time` and wait for something specific:
+
+```python
+page.goto("https://example.com")
+page.locator("#search").fill("playwright testing")   # waits for the element by itself
+page.get_by_role("button", name="Search").click()
 expect(page.locator(".result-item").first).to_be_visible()
 ```
 
 ---
 
-## Bug 4 — Mixing two automation frameworks
+## 4. Selenium import
 
-**Line:** `from selenium import webdriver`
+```python
+from selenium import webdriver
+```
 
-**Problem.** Selenium is imported but never used. It is a typical AI
-hallucination — the model blended two common code patterns. Consequences:
-an unnecessary heavy dependency (`selenium` must be installed or the module
-fails with `ModuleNotFoundError` **at import time**, so pytest cannot even
-collect the test), confusion for readers about which framework is in charge,
-and linters flag it (F401).
+Selenium is imported but never used, looks like two different examples were mixed together.
+Problems:
+- if selenium is not installed, the file fails on import with `ModuleNotFoundError` and pytest
+  can't even collect the test;
+- extra dependency for nothing;
+- confusing for the next person, which framework is used here?
 
-**Fix.** Delete the line. One framework per test suite.
+**Fix:** delete the line.
 
 ---
 
-## Bug 5 — Fragile / ambiguous locators and wrong target
-
-**Lines:** `page.locator("#search")`, `page.locator(".button")`,
-`page.goto("https://example.com")`.
-
-**Problem.**
-- `example.com` is a static placeholder page — it has no search box, so
-  `fill()` will wait 30 s and fail with `TimeoutError`. The URL is also
-  hard-coded instead of coming from configuration.
-- `.button` is a generic styling class. If the page has more than one element
-  with it, Playwright's **strict mode** raises
-  `Error: strict mode violation: locator(".button") resolved to N elements`.
-  If it matches a single but *wrong* button, the test silently does the wrong
-  thing.
-- CSS classes are the most volatile locators (they change with every
-  redesign).
-
-**Fix.** Use user-facing, semantic locators and a configurable base URL:
+## 5. Bad locators and wrong site
 
 ```python
-page.goto(f"{settings.base_url}/")               # from config / env
-search_box = page.get_by_role("searchbox")       # or get_by_placeholder("Search")
+page.goto("https://example.com")
+page.locator("#search")
+page.locator(".button")
+```
+
+- example.com is an empty placeholder page, there is no search on it. `fill()` will wait 30
+  seconds and fail with `TimeoutError`. Also the url is hardcoded instead of coming from config.
+- `.button` is a generic CSS class. If there is more than one such element, Playwright strict mode
+  throws `strict mode violation: locator(".button") resolved to N elements`. If there is exactly one
+  but it's the wrong button, the test clicks it and continues as if everything is fine.
+- CSS classes change with every redesign, they are the least stable locators.
+
+**Fix:** use locators by role / placeholder and take the url from config:
+
+```python
+page.goto(base_url)
+page.get_by_role("searchbox").fill("playwright testing")
 page.get_by_role("button", name="Search").click()
 ```
 
-If CSS must be used — scope it: `page.locator("form#search-form button[type=submit]")`.
+If CSS is really needed, at least make it specific: `form#search-form button[type=submit]`.
 
 ---
 
-## Bug 6 — Design issues (not crashes, but would fail code review)
+## 6. Smaller things
 
-- **No headless/config control** — `launch()` with defaults; headless,
-  browser type, timeouts should come from config/CLI.
-- **Test data hard-coded** (`"playwright testing"`) — should be parametrized
-  (`@pytest.mark.parametrize` or external data file).
-- **No artifacts on failure** — no screenshot/trace, so a red CI run cannot be
-  investigated.
-- **No Page Object** — locators live inside the test; any UI change requires
-  editing every test.
+- browser settings (headless, browser type, timeouts) are hardcoded, should come from config;
+- search text is hardcoded, better to use `@pytest.mark.parametrize` or a data file;
+- no screenshot / trace on failure, so a red CI run can't be investigated;
+- locators are inside the test, no page object, so every UI change means editing every test.
 
 ---
 
-## Corrected version
+## Fixed version
 
 ```python
 import pytest
 from playwright.sync_api import Page, expect
-
-SEARCH_TERMS = ["playwright testing", "pytest"]
 
 
 class SearchPage:
@@ -194,23 +179,25 @@ class SearchPage:
         self.search_button = page.get_by_role("button", name="Search")
         self.results = page.locator(".result-item")
 
-    def open(self) -> "SearchPage":
-        self.page.goto(self.base_url, wait_until="domcontentloaded")
+    def open(self):
+        self.page.goto(self.base_url)
         return self
 
-    def search(self, term: str) -> "SearchPage":
-        self.search_box.fill(term)
+    def search(self, text: str):
+        self.search_box.fill(text)
         self.search_button.click()
         return self
 
 
-@pytest.mark.parametrize("term", SEARCH_TERMS)
-def test_search_functionality(page: Page, base_url: str, term: str):
-    # `page` fixture (pytest-playwright) manages browser/context lifecycle
-    search = SearchPage(page, base_url).open().search(term)
+@pytest.mark.parametrize("text", ["playwright testing", "pytest"])
+def test_search_functionality(page: Page, base_url: str, text: str):
+    search = SearchPage(page, base_url).open().search(text)
 
     expect(search.results.first).to_be_visible()
-    expect(search.results.first).to_contain_text(term.split()[0], ignore_case=True)
+    expect(search.results.first).to_contain_text(text.split()[0], ignore_case=True)
 ```
 
-Run: `pytest --base-url https://<site-with-search> --tracing retain-on-failure --screenshot only-on-failure`
+Run:
+```bash
+pytest --base-url https://<site-with-search> --tracing retain-on-failure --screenshot only-on-failure
+```

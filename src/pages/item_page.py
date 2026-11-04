@@ -8,9 +8,9 @@ from src.pages.base_page import BasePage
 
 class ItemPage(BasePage):
     VARIANTS_CONTAINER = "[data-testid='x-msku-evo']"
-    # eBay renders variants as custom listboxes; a native <select> is kept as fallback.
+    # variants are custom listboxes on eBay, <select> just in case
     VARIANT_LISTBOX_BUTTONS = f"{VARIANTS_CONTAINER} button.listbox-button__control"
-    # Hidden select.listbox__native is the listbox's own backing element, not a separate variant.
+    # skip the hidden select that belongs to the listbox itself
     VARIANT_NATIVE_SELECTS = f"{VARIANTS_CONTAINER} select:not([hidden]):not(.listbox__native)"
     AVAILABLE_OPTION = "[role='option'][data-sku-value-name]:not([aria-disabled='true'])"
 
@@ -18,7 +18,7 @@ class ItemPage(BasePage):
     ADDED_CONFIRMATION = re.compile(r"added to (your )?cart|view in cart", re.I)
 
     def select_random_variants(self) -> dict[str, str]:
-        """Pick a random available value in every variant dropdown (size/color/...)."""
+        # size, color etc. - random value from the ones in stock
         chosen: dict[str, str] = {}
         buttons = self.page.locator(self.VARIANT_LISTBOX_BUTTONS)
         for i in range(buttons.count()):
@@ -57,6 +57,6 @@ class ItemPage(BasePage):
         self.page.locator(self.ADD_TO_CART).first.click()
         self.page.wait_for_load_state("domcontentloaded")
         self.ensure_not_blocked()
-        # eBay either opens the cart page or shows an "Added to cart" layer.
+        # sometimes eBay goes to the cart, sometimes shows a popup
         if "cart." not in self.page.url:
             expect(self.page.get_by_text(self.ADDED_CONFIRMATION).first).to_be_visible()

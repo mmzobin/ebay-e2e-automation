@@ -7,6 +7,5 @@ log = get_logger("reporting")
 
 
 def attach_screenshot(page: Page, name: str) -> None:
-    """Take a screenshot and attach it to the Allure report."""
     allure.attach(page.screenshot(full_page=False), name=name, attachment_type=allure.attachment_type.PNG)
     log.info("Screenshot attached: %s", name)

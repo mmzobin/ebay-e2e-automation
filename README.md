@@ -1,19 +1,17 @@
-# eBay E2E Automation — Playwright + Python
+# eBay E2E tests (Playwright + Python)
 
-End-to-end scenario on eBay: **search products → filter by price → add to cart → verify the cart total**.
-Built with Page Object Model, OOP and data-driven input.
+E2E scenario on eBay: search for items, filter by price, add them to the cart and check the cart
+total. Page Object Model, OOP, test data from a YAML file, Allure report.
 
-The static code review task is in [ReadMeAIBugs.md](ReadMeAIBugs.md).
-
----
+The bugs review task is in [ReadMeAIBugs.md](ReadMeAIBugs.md).
 
 ## How to run
 
-### Prerequisites
-- Python **3.10+**
-- (for the HTML report) [Allure CLI](https://allurereport.org/docs/install/) — `brew install allure` (needs Java)
+Requirements:
+- Python 3.10+
+- for the HTML report: [Allure](https://allurereport.org/docs/install/) (`brew install allure`, needs Java)
 
-### Setup
+Install:
 ```bash
 git clone https://github.com/mmzobin/ebay-e2e-automation.git
 cd ebay-e2e-automation
@@ -23,36 +21,33 @@ pip install -r requirements.txt
 playwright install chromium
 ```
 
-### Run
+Run:
 ```bash
-pytest                                   # default profile: visible browser
-TEST_PROFILE=headless pytest             # headless profile
-pytest -k shoes                          # one scenario
-pytest --slowmo 500                      # slow motion, to watch the steps
-PWDEBUG=1 pytest -k shoes                # step-by-step in Playwright Inspector
+pytest                         # default profile, browser is visible
+TEST_PROFILE=headless pytest   # headless
+pytest -k shoes                # only one scenario
+pytest --slowmo 500            # slower, easier to follow
+PWDEBUG=1 pytest -k shoes      # step by step in Playwright Inspector
 ```
 
-### Reports
+Reports:
 ```bash
-allure serve reports/allure-results      # open the Allure report
-allure generate reports/allure-results -o reports/allure-report --clean --single-file   # one HTML file
-playwright show-trace reports/traces/<test-name>.zip   # step-by-step trace of a run
+allure serve reports/allure-results
+allure generate reports/allure-results -o reports/allure-report --clean --single-file
+playwright show-trace reports/traces/<test name>.zip
 ```
-Every run also writes a JUnit XML report to `reports/junit.xml`.
+JUnit XML is written to `reports/junit.xml` on every run.
 
----
+## Config
 
-## Configuration (profiles, ENV)
+Settings are taken from (top wins):
+1. environment variables, e.g. `HEADLESS=true MAX_PAGES=3 pytest`
+2. `.env` file (see `.env.example`)
+3. profile file `config/profiles/<TEST_PROFILE>.yaml` (`default` or `headless`)
 
-| Source | Example | Priority |
-|---|---|---|
-| Environment variables | `HEADLESS=true MAX_PAGES=3 pytest` | highest |
-| `.env` file (copy from `.env.example`) | `TEST_PROFILE=headless` | |
-| YAML profile `config/profiles/<TEST_PROFILE>.yaml` | `default`, `headless` | lowest |
+Variables: `TEST_PROFILE`, `BASE_URL`, `HEADLESS`, `MAX_PAGES`, `EBAY_USER`, `EBAY_PASSWORD`.
 
-Supported overrides: `TEST_PROFILE`, `BASE_URL`, `HEADLESS`, `MAX_PAGES`, `EBAY_USER`, `EBAY_PASSWORD`.
-
-**Test data** lives in [`data/search_scenarios.yaml`](data/search_scenarios.yaml); each entry becomes a separate test case:
+Test data is in `data/search_scenarios.yaml`. Every item there is a separate test case:
 ```yaml
 - id: shoes_under_220
   query: shoes
@@ -60,85 +55,89 @@ Supported overrides: `TEST_PROFILE`, `BASE_URL`, `HEADLESS`, `MAX_PAGES`, `EBAY_
   limit: 5
 ```
 
----
-
-## Architecture
+## Project structure
 
 ```
 config/
-  settings.py              # loads YAML profile + .env + ENV into one Settings object
+  settings.py              # profile + .env + env vars
   profiles/                # default.yaml, headless.yaml
 data/
-  search_scenarios.yaml    # data-driven test input
+  search_scenarios.yaml    # test data
 src/
-  pages/                   # Page Objects: locators + atomic page actions only
-    base_page.py           #   open(), bot-protection detection
-    home_page.py           #   search box
-    search_results_page.py #   XPath item parsing, price filter, paging
-    item_page.py           #   random variant selection, Add to cart
-    cart_page.py           #   subtotal
+  pages/                   # page objects: locators and page actions
+    base_page.py           # open page, detect eBay block page
+    home_page.py
+    search_results_page.py # parse items with xpath, price filter, paging
+    item_page.py           # random variants, add to cart
+    cart_page.py           # subtotal
     login_page.py
-  services/                # business flows = the 4 functions of the assignment
-    auth_service.py        #   login()
-    search_service.py      #   search_items_by_name_under_price()
-    cart_service.py        #   add_items_to_cart(), assert_cart_total_not_exceeds()
-  models/                  # dataclasses: SearchScenario, SearchResultItem
-  utils/                   # price_parser, data_loader, logger, Allure helpers
+  services/                # the 4 functions from the task
+    auth_service.py        # login()
+    search_service.py      # search_items_by_name_under_price()
+    cart_service.py        # add_items_to_cart(), assert_cart_total_not_exceeds()
+  models/                  # dataclasses
+  utils/                   # price parser, data loader, logger, allure helper
 tests/e2e/
-  test_shopping_flow.py    # the full scenario, parametrized from YAML
-conftest.py                # browser config from profile, tracing, failure screenshots
+  test_shopping_flow.py    # full scenario, parametrized from yaml
+conftest.py                # browser settings from profile, trace, screenshot on failure
 ```
 
-**Layers:** test → services → pages. Tests contain no locators; pages contain no business
-logic; services combine page actions into the assignment's functions. Each class has one
-responsibility (SRP).
+Test calls services, services use pages. There are no locators in the test and no business logic
+in pages.
 
-### The four functions
+### The 4 functions
 
-| Function | Behaviour |
-|---|---|
-| `AuthService.login()` | Logs in if `EBAY_USER`/`EBAY_PASSWORD` are set, otherwise continues as guest. If eBay shows a captcha, falls back to guest (captcha is out of scope). |
-| `search_items_by_name_under_price(query, max_price, limit=5)` | Searches, applies the page's price filter (falls back to the `_udhi` URL parameter if the filter is missing), extracts items with **XPath**, keeps those with price ≤ `max_price`, follows **Next** until `limit` items are found or pages run out. Returns 0..`limit` URLs. |
-| `add_items_to_cart(urls)` | Opens each item in a new tab, picks a **random available** value in every variant dropdown (size, color…), clicks *Add to cart*, attaches a screenshot, closes the tab and returns to the search tab. |
-| `assert_cart_total_not_exceeds(budget_per_item, items_count)` | Opens the cart, reads the **Subtotal**, asserts `subtotal ≤ budget_per_item × items_count`, attaches a screenshot of the cart. |
+**`AuthService.login()`** - if `EBAY_USER` / `EBAY_PASSWORD` are set, logs in. Otherwise continues
+as guest. If eBay shows a captcha it also continues as guest (captcha is out of scope).
 
-### Robustness / locators
-- **Two search layouts** supported: current `li.s-card` and legacy `li.s-item`.
-- The **"Shop on eBay" promo card** has a fake `/itm/` link — excluded (real results carry `@data-item-pos`).
-- **Price parsing** handles `$12.99`, `ILS 1,234.56`, `US $…`; a **range** (`ILS 10.00 to ILS 25.00`) is
-  rendered as separate spans and is evaluated by its **upper bound** — a variant is chosen randomly
-  later, so the conservative value keeps the cart within budget. Strikethrough "was" prices are ignored.
-- **Variants** are custom listboxes (not `<select>`): out-of-stock options (`aria-disabled="true"`) are
-  skipped; the hidden backing `<select>` is ignored; a real `<select>` is supported as a fallback.
-- **No hard sleeps** — Playwright auto-waiting and `expect()` assertions.
-- **Bot protection detection**: if eBay returns its block page / captcha, the test is marked
-  **skipped** with the reason and a screenshot, instead of failing on a locator timeout.
+**`search_items_by_name_under_price(query, max_price, limit=5)`** - searches, sets max price in the
+price filter on the page (if there is no filter, adds `_udhi` to the url), takes items with xpath and
+keeps the ones with price <= max_price. If there are not enough on the page, clicks Next until it has
+`limit` items or pages end. Returns 0 to `limit` urls.
 
-### Reporting
-- **Allure**: steps for each function, screenshot per added item, cart screenshot,
-  full Playwright trace of each test, screenshot on failure.
-- **Logs**: every action is logged to the console (`log_cli`).
-- **JUnit XML**: `reports/junit.xml`.
+**`add_items_to_cart(urls)`** - opens every item in a new tab, picks a random value in each variant
+(size, color...) from the ones in stock, clicks Add to cart, saves a screenshot, closes the tab and
+goes back to the search tab.
 
----
+**`assert_cart_total_not_exceeds(budget_per_item, items_count)`** - opens the cart, reads Subtotal
+and checks `subtotal <= budget_per_item * items_count`. Saves a screenshot of the cart.
 
-## Limitations and assumptions
+### Things I handled on eBay pages
 
-- **eBay bot protection (Akamai).** During development (Nov 2026) eBay returned its *"Error Page"*
-  to every Playwright-controlled browser (Chromium, Chrome, Firefox — headless and headed), while a
-  regular browser on the same network worked. Bypassing bot protection is out of scope (the
-  assignment says captcha does not need to be handled), so the framework detects the block page and
-  skips the test with a clear reason. Locators were verified against real eBay pages (search results,
-  item with variants, cart) saved from a regular browser.
-- **Login**: guest mode by default — eBay allows adding to cart without an account, and automated
-  login is normally stopped by a captcha. Credentials are read only from ENV / `.env` (never committed).
-  Login page locators are eBay's standard ones but could not be verified live.
-- **Currency**: eBay shows prices in the currency of your region (ILS from Israel, USD from the US).
-  `max_price` and the cart subtotal are compared in the currency the site displays; both the search
-  results and the cart use the same currency.
-- **Quantity** is always 1 (variants like size/color are random). A random quantity would make
-  `subtotal ≤ budget_per_item × items_count` meaningless.
-- **Paging** stops after `max_pages` (default 5, configurable via `MAX_PAGES`) as a safety limit.
-- **Subtotal** (items only, without shipping) is used as the cart total.
-- **Cart state**: the test does not clear the cart beforehand; in guest mode every run starts with a
-  fresh browser context, so the cart is empty.
+- Search results come in two layouts, new `li.s-card` and old `li.s-item`. Both are supported.
+- First card "Shop on eBay" is an ad with a fake `/itm/` link. Real items have `data-item-pos`, the
+  ad doesn't, so it's filtered out.
+- Prices: `$12.99`, `ILS 1,234.56`, `US $...`. A price range ("ILS 10.00 to ILS 25.00") comes as
+  separate spans; I take the higher price because the variant is chosen randomly later. The
+  crossed-out old price is ignored.
+- Variants are custom dropdowns, not `<select>`. Out of stock options have `aria-disabled="true"` and
+  are skipped. Normal `<select>` is supported too just in case.
+- No `sleep()`, only Playwright auto-waiting and `expect()`.
+- If eBay shows its block page or a captcha, the test is skipped with the reason and a screenshot
+  instead of failing on a timeout.
+
+### Report
+
+In Allure: steps of each function, screenshot of every item added to the cart, screenshot of the
+cart, Playwright trace of the whole test, screenshot on failure. All actions are also logged to the
+console.
+
+## Limitations / assumptions
+
+- **eBay blocks automated browsers.** When I worked on this (Nov 2026) eBay returned "Error Page" to
+  every browser controlled by Playwright: Chromium, Chrome and Firefox, headless and headed. A normal
+  browser on the same network worked fine. Getting around bot protection is not part of the task
+  (captcha doesn't need to be handled), so the test detects this page and is skipped. I checked the
+  locators on real eBay pages saved from a normal browser (search results, item with sizes, cart).
+- **Login:** guest by default. eBay lets you add to cart without an account, and automated login
+  usually gets a captcha anyway. Credentials only from env / `.env`, never in the repo. Login page
+  locators are the standard eBay ones but I couldn't check them live.
+- **Currency:** eBay shows prices in the local currency (ILS from Israel, USD from the US).
+  `max_price` and the subtotal are compared in whatever currency the site shows. Search results and
+  cart use the same one.
+- **Quantity is always 1.** Size and color are random, but random quantity would break the
+  `budget_per_item * items_count` check.
+- **Paging** stops after `max_pages` (5 by default, `MAX_PAGES` to change), just as a safety limit.
+- **Subtotal** (items without shipping) is used as the cart total.
+- The cart is not cleared before the test. As a guest every run starts with a new browser context,
+  so the cart is empty anyway.

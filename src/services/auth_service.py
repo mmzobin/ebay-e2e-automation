@@ -8,7 +8,7 @@ from src.utils.logger import get_logger
 
 
 class AuthService:
-    """Authentication: real login when credentials are set in ENV, otherwise guest mode."""
+    """Login with EBAY_USER / EBAY_PASSWORD from env, guest mode if they are not set."""
 
     def __init__(self, page: Page):
         self.page = page
@@ -23,7 +23,7 @@ class AuthService:
         try:
             login_page.open().login(settings.ebay_user, settings.ebay_password)
         except BotProtectionError as error:
-            # Captcha handling is out of scope (per assignment) -> degrade to guest.
+            # captcha is out of scope for this task, continue as guest
             self.log.warning("Login blocked by captcha/bot protection, continue as guest: %s", error)
             return False
         signed_in = login_page.is_signed_in()

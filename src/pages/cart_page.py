@@ -15,7 +15,7 @@ class CartPage(BasePage):
         return subtotal.inner_text().strip() if subtotal.count() else None
 
     def get_subtotal(self) -> float:
-        """Subtotal as shown on the page; an empty cart has no subtotal -> 0."""
+        # empty cart has no subtotal at all
         return parse_price(self.get_subtotal_text()) or 0.0
 
     def get_items_count(self) -> int:

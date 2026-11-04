@@ -5,12 +5,10 @@ from src.utils.reporting import attach_screenshot
 
 
 class BotProtectionError(Exception):
-    """eBay anti-bot (Akamai) blocked the automated browser."""
+    """eBay showed its anti-bot / error page."""
 
 
 class BasePage:
-    """Common behaviour for all page objects."""
-
     BLOCK_PAGE_TITLES = ("error page | ebay", "pardon our interruption", "security measure")
     CAPTCHA = "iframe[title*='captcha' i], #captcha_loading, div[id*='captcha' i]"
 
@@ -25,7 +23,7 @@ class BasePage:
         return self
 
     def ensure_not_blocked(self) -> None:
-        """Fail fast with a clear reason instead of a locator timeout."""
+        # better to stop here than wait 15s for a locator that will never show up
         title = self.page.title().lower()
         if any(marker in title for marker in self.BLOCK_PAGE_TITLES) or self.page.locator(self.CAPTCHA).count():
             attach_screenshot(self.page, "bot_protection_page")

@@ -1,4 +1,4 @@
-"""Configuration: YAML profile (config/profiles/<TEST_PROFILE>.yaml) + ENV overrides."""
+"""Settings = yaml profile from config/profiles + .env + env variables (env wins)."""
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -10,7 +10,7 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT_DIR / "data"
 REPORTS_DIR = ROOT_DIR / "reports"
 
-load_dotenv(ROOT_DIR / ".env")  # real environment variables still take precedence
+load_dotenv(ROOT_DIR / ".env")  # doesn't override vars that are already set
 
 
 @dataclass(frozen=True)
@@ -28,7 +28,7 @@ class Settings:
     def has_credentials(self) -> bool:
         return bool(self.ebay_user and self.ebay_password)
 
-    def __repr__(self) -> str:  # never print the password
+    def __repr__(self) -> str:  # don't show password in logs
         return f"Settings(profile={self.profile}, base_url={self.base_url}, headless={self.headless})"
 
 

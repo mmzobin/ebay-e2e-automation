@@ -15,7 +15,7 @@ class LoginPage(BasePage):
     def login(self, username: str, password: str) -> None:
         self.page.locator(self.USERNAME).fill(username)
         self.page.locator(self.CONTINUE).click()
-        self.ensure_not_blocked()  # eBay usually shows a captcha at this step
+        self.ensure_not_blocked()  # captcha usually appears here
         self.page.locator(self.PASSWORD).fill(password)
         self.page.locator(self.SIGN_IN).click()
         self.page.wait_for_load_state("domcontentloaded")

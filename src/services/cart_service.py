@@ -16,7 +16,7 @@ class CartService:
     def add_items_to_cart(self, urls: list[str]) -> None:
         for index, url in enumerate(urls, start=1):
             with allure.step(f"Add item {index}/{len(urls)}: {url}"):
-                item_tab = self.page.context.new_page()  # item opens in its own tab, as on eBay
+                item_tab = self.page.context.new_page()  # eBay opens items in a new tab anyway
                 item_page = ItemPage(item_tab).open(url)
                 item_page.select_random_variants()
                 item_page.add_to_cart()

@@ -43,7 +43,7 @@ JUnit XML is written to `reports/junit.xml` on every run.
 [`docs/report/allure-report.html`](docs/report/allure-report.html) (download and open in a browser,
 it's a single file) and [`docs/report/junit.xml`](docs/report/junit.xml).
 
-Both scenarios are **skipped** there: eBay returned its block page right on the home page (see
+All scenarios are **skipped** there: eBay returned its block page right on the home page (see
 Limitations below). The report has the screenshot of that page and the Playwright trace.
 
 ## Config

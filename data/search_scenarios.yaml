@@ -10,3 +10,8 @@ scenarios:
     query: usb c cable
     max_price: 40
     limit: 3
+  # narrow query + low price: fewer than `limit` items (maybe 0) is expected and valid
+  - id: rare_item_fewer_than_limit
+    query: leica m3 viewfinder cap
+    max_price: 20
+    limit: 5

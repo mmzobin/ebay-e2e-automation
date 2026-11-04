@@ -1,0 +1,12 @@
+# GitHub Actions: headless, more tolerant timeouts
+base_url: https://www.ebay.com
+browser: chromium
+headless: true
+slow_mo: 0
+locale: en-US
+timezone_id: America/New_York
+viewport: {width: 1440, height: 900}
+default_timeout_ms: 20000
+navigation_timeout_ms: 60000
+max_pages: 3
+auth_mode: guest

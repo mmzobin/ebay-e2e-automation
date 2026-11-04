@@ -1,0 +1,6 @@
+# Headless run (no visible browser)
+base_url: https://www.ebay.com
+headless: true
+locale: en-US
+default_timeout_ms: 15000
+max_pages: 5

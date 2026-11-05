@@ -1,3 +1,4 @@
+import re
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from playwright.sync_api import Locator
@@ -17,14 +18,23 @@ class SearchResultsPage(BasePage):
         "[.//a[contains(@href, '/itm/')]][not(.//*[normalize-space(text())='Shop on eBay'])]"
     )
     CARD_LINK_XPATH = ".//a[contains(@href, '/itm/')]"
-    # first span only, there is also hidden text "Opens in a new window or tab"
-    CARD_TITLE_XPATH = "(.//*[contains(@class, 's-card__title') or contains(@class, 's-item__title')]//span)[1]"
+    # skip the hidden span.clipped "Opens in a new window or tab"
+    CARD_TITLE_XPATH = (
+        "(.//*[contains(@class, 's-card__title') or contains(@class, 's-item__title')]"
+        "//span[not(contains(@class, 'clipped'))])[1]"
+    )
     # range price comes as 3 spans: "ILS 10", " to ", "ILS 25".
     # reading only these spans, so the crossed-out old price is ignored
     CARD_PRICE_XPATH = ".//*[contains(@class, 's-card__price') or contains(@class, 's-item__price')]"
 
-    MAX_PRICE_INPUT = "input[type='text'][aria-label^='Maximum Value']"
-    PRICE_SUBMIT = "button[title='Submit price range']"
+    @property
+    def max_price_input(self):
+        # textbox role - the price slider has the same label but role slider
+        return self.page.get_by_role("textbox", name=re.compile(r"^Maximum Value")).first
+
+    @property
+    def price_submit(self):
+        return self.page.get_by_role("button", name="Submit price range")
 
     @property
     def next_page_link(self):
@@ -38,11 +48,11 @@ class SearchResultsPage(BasePage):
 
     def apply_max_price_filter(self, max_price: float) -> "SearchResultsPage":
         # if there is no filter on the page - use the url param instead
-        max_input = self.page.locator(self.MAX_PRICE_INPUT).first
+        max_input = self.max_price_input
         if max_input.count() and max_input.is_visible():
             self.log.info("Apply price filter via UI: max=%s", max_price)
             max_input.fill(str(int(max_price)))
-            self.page.locator(self.PRICE_SUBMIT).first.click()
+            self.price_submit.click()
             self.page.wait_for_url("**_udhi=*")
         else:
             self.log.info("Price filter not found on page -> URL parameter _udhi=%s", max_price)

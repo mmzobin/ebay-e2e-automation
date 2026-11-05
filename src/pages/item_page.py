@@ -1,5 +1,4 @@
 import random
-import re
 
 from playwright.sync_api import Locator, expect
 
@@ -9,13 +8,15 @@ from src.pages.cart_page import CartPage
 
 class ItemPage(BasePage):
     VARIANTS_CONTAINER = "[data-testid='x-msku-evo']"
-    # variants are custom listboxes on eBay, <select> just in case
-    VARIANT_LISTBOX_BUTTONS = f"{VARIANTS_CONTAINER} button.listbox-button__control"
+    # variants are custom listboxes on eBay (a button that opens a listbox), <select> just in case
+    VARIANT_LISTBOX_BUTTONS = f"{VARIANTS_CONTAINER} button[aria-haspopup='listbox']"
     # skip the hidden select that belongs to the listbox itself
     VARIANT_NATIVE_SELECTS = f"{VARIANTS_CONTAINER} select:not([hidden]):not(.listbox__native)"
     AVAILABLE_OPTION = "[role='option'][data-sku-value-name]:not([aria-disabled='true'])"
 
-    ADDED_CONFIRMATION = re.compile(r"added to (your )?cart|view in cart", re.I)
+    CART_ICON = "a[aria-label^='Your shopping cart contains']"
+    # popup after Add to cart, it has class "spinner" while it's still loading
+    ADDED_POPUP = "[role='dialog'].x-atc-action__overlay:not(.spinner)"
 
     @property
     def add_to_cart_button(self):
@@ -39,9 +40,12 @@ class ItemPage(BasePage):
         return chosen
 
     def _select_in_listbox(self, button: Locator) -> tuple[str, str]:
-        label = button.locator(".btn__label").inner_text().strip()
+        # button text is "US Shoe Size (Men's):US 9" - the part before ":" is the name
+        label = (button.text_content() or "").split(":")[0].strip()
         button.click()
-        options = self.page.locator(f"#{button.get_attribute('aria-controls')} {self.AVAILABLE_OPTION}")
+        # [id=...] and not #id: eBay ids can have [ ] and @ inside, they break a css #id selector
+        listbox_id = button.get_attribute("aria-controls")
+        options = self.page.locator(f"[id='{listbox_id}'] {self.AVAILABLE_OPTION}")
         if options.count() == 0:
             raise AssertionError(f"No available values for variant '{label}' on {self.page.url}")
         option = options.nth(random.randrange(options.count()))
@@ -60,14 +64,17 @@ class ItemPage(BasePage):
         return select.get_attribute("name") or "select", value
 
     def add_to_cart(self) -> None:
-        self.log.info("Click 'Add to cart'")
+        cart_icon = self.page.locator(self.CART_ICON).first
+        count_before = cart_icon.get_attribute("aria-label") if cart_icon.count() else None
+        self.log.info("Click 'Add to cart' (%s)", count_before)
         self.add_to_cart_button.click()
-        # sometimes eBay goes to the cart, sometimes shows a popup - wait for any of them.
-        # expect() keeps checking after navigation, so no race with page load
-        popup = self.page.get_by_text(self.ADDED_CONFIRMATION)
-        cart = self.page.locator(CartPage.ITEMS)
+        # eBay can go to the cart page, open a popup or just update the cart icon in the
+        # header - wait for any of them. expect() keeps checking after navigation, no race
+        done = self.page.locator(CartPage.ITEMS).or_(self.page.locator(self.ADDED_POPUP))
+        if count_before:
+            done = done.or_(self.page.locator(f"{self.CART_ICON}:not([aria-label='{count_before}'])"))
         try:
-            expect(popup.or_(cart).first).to_be_visible()
+            expect(done.first).to_be_visible()
         except AssertionError:
             self.ensure_not_blocked()  # block page -> skip instead of fail
             raise

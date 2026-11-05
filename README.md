@@ -121,8 +121,11 @@ and checks `subtotal <= budget_per_item * items_count`. Saves a screenshot of th
   crossed-out old price is ignored.
 - Variants are custom dropdowns, not `<select>`. Out of stock options have `aria-disabled="true"` and
   are skipped. Normal `<select>` is supported too just in case.
-- After Add to cart eBay either opens the cart or shows a popup. The test waits for any of them with
-  one locator (`.or_()`), so there is no race with page navigation.
+- After Add to cart eBay can open the cart, show a popup or just update the cart icon in the header
+  ("Your shopping cart contains N items"). The test waits for any of these with one locator
+  (`.or_()`), so there is no race with page navigation and no dependency on popup wording.
+- Locators: roles and test ids first (`get_by_role`, `data-testid`), XPath for the search results as
+  the task asks. Listbox options are found by `[id='...']`, not `#id`: eBay ids may contain `[ ]` and `@`.
 - The cart subtotal is read only after it's visible. Otherwise a cart that is still loading could be
   read as 0 and the check would pass for nothing.
 - No `sleep()`, only Playwright auto-waiting and `expect()`.

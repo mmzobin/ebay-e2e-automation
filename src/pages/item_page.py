@@ -4,6 +4,7 @@ import re
 from playwright.sync_api import Locator, expect
 
 from src.pages.base_page import BasePage
+from src.pages.cart_page import CartPage
 
 
 class ItemPage(BasePage):
@@ -61,8 +62,12 @@ class ItemPage(BasePage):
     def add_to_cart(self) -> None:
         self.log.info("Click 'Add to cart'")
         self.add_to_cart_button.click()
-        self.page.wait_for_load_state("domcontentloaded")
-        self.ensure_not_blocked()
-        # sometimes eBay goes to the cart, sometimes shows a popup
-        if "cart." not in self.page.url:
-            expect(self.page.get_by_text(self.ADDED_CONFIRMATION).first).to_be_visible()
+        # sometimes eBay goes to the cart, sometimes shows a popup - wait for any of them.
+        # expect() keeps checking after navigation, so no race with page load
+        popup = self.page.get_by_text(self.ADDED_CONFIRMATION)
+        cart = self.page.locator(CartPage.ITEMS)
+        try:
+            expect(popup.or_(cart).first).to_be_visible()
+        except AssertionError:
+            self.ensure_not_blocked()  # block page -> skip instead of fail
+            raise

@@ -49,6 +49,19 @@ class SearchResultsPage(BasePage):
             self.page.goto(self._url_with(_udhi=int(max_price)), wait_until="domcontentloaded")
         return self.wait_loaded()
 
+    def show_buy_it_now_only(self) -> "SearchResultsPage":
+        # auctions have only "Place bid", no "Add to cart" - so fixed price items only.
+        # tab link is built by eBay from current url, so the price filter stays
+        tab = self.page.get_by_role("link", name="Buy It Now", exact=True).first
+        if tab.count() and tab.is_visible():
+            self.log.info("Filter: Buy It Now")
+            tab.click()
+            self.page.wait_for_url("**LH_BIN=1*")
+        else:
+            self.log.info("Buy It Now tab not found -> URL parameter LH_BIN=1")
+            self.page.goto(self._url_with(LH_BIN=1), wait_until="domcontentloaded")
+        return self.wait_loaded()
+
     def _url_with(self, **params) -> str:
         parts = urlsplit(self.page.url)
         query = dict(parse_qsl(parts.query))

@@ -14,7 +14,12 @@ class SearchService:
     @allure.step("Search '{query}' with price <= {max_price}, limit {limit}")
     def search_items_by_name_under_price(self, query: str, max_price: float, limit: int = 5) -> list[str]:
         """Returns up to `limit` urls with price <= max_price. Fewer (or 0) is ok."""
-        results = HomePage(self.page).open().search(query).apply_max_price_filter(max_price)
+        results = (
+            HomePage(self.page).open()
+            .search(query)
+            .apply_max_price_filter(max_price)
+            .show_buy_it_now_only()
+        )
         urls: list[str] = []
         page_number = 1
         while True:

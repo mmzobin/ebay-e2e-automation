@@ -28,10 +28,14 @@ class CartService:
     @allure.step("Assert cart total <= {budget_per_item} x {items_count}")
     def assert_cart_total_not_exceeds(self, budget_per_item: float, items_count: int) -> None:
         cart = CartPage(self.page).open()
+        if items_count == 0:
+            attach_screenshot(self.page, "cart")
+            self.log.info("No items were added, nothing to compare")
+            return
         subtotal = cart.get_subtotal()
         threshold = budget_per_item * items_count
         attach_screenshot(self.page, "cart")
-        self.log.info("Cart subtotal '%s' -> %.2f, threshold %.2f", cart.get_subtotal_text(), subtotal, threshold)
+        self.log.info("Subtotal %.2f, threshold %.2f", subtotal, threshold)
         assert subtotal <= threshold, (
             f"Cart subtotal {subtotal:.2f} exceeds budget {budget_per_item} x {items_count} = {threshold:.2f}"
         )

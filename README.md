@@ -99,7 +99,8 @@ in pages.
 as guest. If eBay shows a captcha it also continues as guest (captcha is out of scope).
 
 **`search_items_by_name_under_price(query, max_price, limit=5)`** - searches, sets max price in the
-price filter on the page (if there is no filter, adds `_udhi` to the url), takes items with xpath and
+price filter on the page (if there is no filter, adds `_udhi` to the url), switches to Buy It Now
+(auctions have no Add to cart button; `LH_BIN=1` in the url as a fallback), takes items with xpath and
 keeps the ones with price <= max_price. If there are not enough on the page, clicks Next until it has
 `limit` items or pages end. Returns 0 to `limit` urls.
 
@@ -120,6 +121,10 @@ and checks `subtotal <= budget_per_item * items_count`. Saves a screenshot of th
   crossed-out old price is ignored.
 - Variants are custom dropdowns, not `<select>`. Out of stock options have `aria-disabled="true"` and
   are skipped. Normal `<select>` is supported too just in case.
+- After Add to cart eBay either opens the cart or shows a popup. The test waits for any of them with
+  one locator (`.or_()`), so there is no race with page navigation.
+- The cart subtotal is read only after it's visible. Otherwise a cart that is still loading could be
+  read as 0 and the check would pass for nothing.
 - No `sleep()`, only Playwright auto-waiting and `expect()`.
 - If eBay shows its block page or a captcha, the test is skipped with the reason and a screenshot
   instead of failing on a timeout.
